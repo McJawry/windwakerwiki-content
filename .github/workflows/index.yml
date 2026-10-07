@@ -1,0 +1,46 @@
+# Keeps _index.json (page list + search data) up to date whenever pages change.
+# Runs with the repository's built-in token: no secrets or extra setup needed.
+name: Update page index
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['_index.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: page-index
+  cancel-in-progress: false
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The indexer lives in the wiki app repository (public).
+      - uses: actions/checkout@v4
+        with:
+          repository: McJawry/windwakerwiki
+          ref: main
+          path: .wiki-tools
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: node .wiki-tools/scripts/build-index.mjs --dir . --out _index.json
+
+      - name: Commit the index
+        run: |
+          git config user.name "wiki-index[bot]"
+          git config user.email "wiki-index[bot]@users.noreply.github.com"
+          git add _index.json
+          if git diff --cached --quiet; then echo "Index unchanged"; else
+            git commit -m "Update page index"
+            git pull --rebase
+            git push
+          fi
